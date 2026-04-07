@@ -1,5 +1,7 @@
 import os
 import re
+import shutil
+import sys
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 from moviepy import ImageSequenceClip
@@ -9,14 +11,17 @@ from groq import Groq
 # CONFIG
 # =========================
 load_dotenv()
+sys.stdout.reconfigure(encoding='utf-8')
 
 IMG_DIR = "IMG"
 OUTPUT_DIR = "output"
 FRAMES_DIR = os.path.join(OUTPUT_DIR, "frames")
 FONT_PATH = "fonts/comic.ttf"
 EMOTIONS = ["exhausted", "curious", "confused", "happy"]
+CONVERSATIONS_FILE = "conversations.txt"
 
 os.makedirs(FRAMES_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # =========================
 # GROQ CLIENT
@@ -31,23 +36,37 @@ emotion_cache = {}
 
 # =========================
 # PARSE CONVERSATIONS
+# Always returns a list of sets.
+# Single video  → one set  → [[...dialogues...]]
+# Bulk videos   → N sets   → [[...], [...], ...]
 # =========================
 def parse_conversations(file_path):
-    dialogues = []
+    conversation_sets = []
+    current_set = []
 
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
+
+            if line.startswith("---"):
+                if current_set:
+                    conversation_sets.append(current_set)
+                    current_set = []
+                continue
+
             if not line:
                 continue
 
             match = re.match(r'^(AD|T)\s*:\s*[""]?(.+?)[""]?$', line)
             if match:
-                dialogues.append((match.group(1), match.group(2).strip()))
+                current_set.append((match.group(1), match.group(2).strip()))
             else:
                 print(f"[SKIPPED LINE] -> {line}")
 
-    return dialogues
+    if current_set:
+        conversation_sets.append(current_set)
+
+    return conversation_sets
 
 
 # =========================
@@ -68,12 +87,11 @@ Return ONLY one word.
 
 Text: "{text}"
 """
-
     try:
         response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
         )
         emotion = response.choices[0].message.content.strip().lower()
         if emotion not in EMOTIONS:
@@ -133,10 +151,7 @@ def create_frame(text, speaker, emotion, index):
     font = ImageFont.truetype(FONT_PATH, 32)
     W, H = img.size
 
-    if speaker == "AD":
-        box = (0, 0, int(W * 0.5), int(H * 0.4))
-    else:
-        box = (int(W * 0.5), 0, W, int(H * 0.4))
+    box = (0, 0, int(W * 0.5), int(H * 0.4)) if speaker == "AD" else (int(W * 0.5), 0, W, int(H * 0.4))
 
     draw_text_in_box(draw, text, font, box)
 
@@ -146,36 +161,62 @@ def create_frame(text, speaker, emotion, index):
 
 
 # =========================
+# CLEAR FRAMES
+# =========================
+def clear_frames():
+    if os.path.exists(FRAMES_DIR):
+        shutil.rmtree(FRAMES_DIR)
+    os.makedirs(FRAMES_DIR, exist_ok=True)
+
+
+# =========================
 # CREATE VIDEO
 # =========================
-def create_video(frame_paths):
+def create_video(frame_paths, output_filename):
     clip = ImageSequenceClip(frame_paths, fps=1/3)
-    output_path = os.path.join(OUTPUT_DIR, "final.mp4")
+    output_path = os.path.join(OUTPUT_DIR, output_filename)
     clip.write_videofile(output_path, codec="libx264")
+    print(f"Saved → {output_path}")
+
+
+# =========================
+# PROCESS A SINGLE SET
+# =========================
+def process_set(dialogues, set_index, is_bulk):
+    label = f"set {set_index + 1}" if is_bulk else "conversation"
+    print(f"\nProcessing {label} ({len(dialogues)} lines)...")
+
+    clear_frames()
+    frame_paths = []
+
+    for i, (speaker, text) in enumerate(dialogues):
+        print(f"  {speaker}: {text}")
+        emotion = detect_emotion(text) if speaker == "AD" else "exhausted"
+        frame_paths.append(create_frame(text, speaker, emotion, i))
+
+    output_filename = f"final_{set_index + 1}.mp4" if is_bulk else "final.mp4"
+    create_video(frame_paths, output_filename)
 
 
 # =========================
 # MAIN
 # =========================
 def main():
-    print("Parsing conversations...")
-    dialogues = parse_conversations("conversations.txt")
+    print(f"Reading {CONVERSATIONS_FILE}...")
+    conversation_sets = parse_conversations(CONVERSATIONS_FILE)
 
-    if not dialogues:
-        print("No valid dialogues found.")
+    if not conversation_sets:
+        print("No valid conversations found.")
         return
 
-    print(f"Processing {len(dialogues)} dialogue lines...")
-    frame_paths = []
+    is_bulk = len(conversation_sets) > 1
+    mode = f"BULK ({len(conversation_sets)} videos)" if is_bulk else "SINGLE video"
+    print(f"Mode detected: {mode}")
 
-    for i, (speaker, text) in enumerate(dialogues):
-        print(f"{speaker}: {text}")
-        emotion = detect_emotion(text) if speaker == "AD" else "exhausted"
-        frame_paths.append(create_frame(text, speaker, emotion, i))
+    for set_index, dialogues in enumerate(conversation_sets):
+        process_set(dialogues, set_index, is_bulk)
 
-    print("Creating video...")
-    create_video(frame_paths)
-    print("Done! Check output/final.mp4")
+    print("\nDone! All videos generated.")
 
 
 if __name__ == "__main__":
