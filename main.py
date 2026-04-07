@@ -71,9 +71,9 @@ Text: "{text}"
 
     try:
         response = client.chat.completions.create(
-            model="llama3-70b-8192",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
         )
         emotion = response.choices[0].message.content.strip().lower()
         if emotion not in EMOTIONS:
@@ -130,7 +130,7 @@ def create_frame(text, speaker, emotion, index):
 
     img = Image.open(base_img_path).convert("RGB")
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(FONT_PATH, 42)
+    font = ImageFont.truetype(FONT_PATH, 32)
     W, H = img.size
 
     if speaker == "AD":

@@ -6,3 +6,4 @@ If you need to create multiple videos in a single stretch, provide multiple set 
 # TODO
 * Make the conversation text size smaller
 * ⁠Reduce the text appearance at a time
+* Fix emotion of the depressed character - ISSUE: If he looks curious on one image, and on the following image he looks exhausted again. FIX: Instead, the same base template as before should be used.
