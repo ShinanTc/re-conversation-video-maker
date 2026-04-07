@@ -55,4 +55,3 @@ Output: `output/final_1.mp4`, `output/final_2.mp4`, and so on.
 
 # TODO
 * ⁠Reduce the text appearance at a time
-* Fix emotion of the depressed character - ISSUE: If he looks curious on one image, and on the following image he looks exhausted again. FIX: Instead, the same base template as before should be used.

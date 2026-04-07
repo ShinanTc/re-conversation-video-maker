@@ -188,11 +188,18 @@ def process_set(dialogues, set_index, is_bulk):
 
     clear_frames()
     frame_paths = []
+    last_emotion = "exhausted"
+    first_ad_seen = False
 
     for i, (speaker, text) in enumerate(dialogues):
         print(f"  {speaker}: {text}")
-        emotion = detect_emotion(text) if speaker == "AD" else "exhausted"
-        frame_paths.append(create_frame(text, speaker, emotion, i))
+        if speaker == "AD":
+            if first_ad_seen:
+                last_emotion = detect_emotion(text)
+            else:
+                # First AD line always uses exhausted; start tracking from the next one
+                first_ad_seen = True
+        frame_paths.append(create_frame(text, speaker, last_emotion, i))
 
     output_filename = f"final_{set_index + 1}.mp4" if is_bulk else "final.mp4"
     create_video(frame_paths, output_filename)
