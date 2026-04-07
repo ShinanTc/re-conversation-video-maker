@@ -5,11 +5,13 @@ from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 from moviepy import ImageSequenceClip
 from groq import Groq
+import sys
 
 # =========================
 # CONFIG
 # =========================
 load_dotenv()
+sys.stdout.reconfigure(encoding='utf-8')
 
 IMG_DIR = "IMG"
 OUTPUT_DIR = "output"
@@ -84,9 +86,9 @@ Text: "{text}"
 
     try:
         response = client.chat.completions.create(
-            model="llama3-70b-8192",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
         )
         emotion = response.choices[0].message.content.strip().lower()
         if emotion not in EMOTIONS:
